@@ -12,7 +12,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     uint public immutable feePercent; // fee percentage on sales
     uint public itemCount;
 
-    uint landInspectorId;
+    uint public landInspectorId;
     mapping(uint => address) public registeredLandInspectors; // record of all the approved land inspectors
 
     // Add a new land inspector [Can only be called by owner of the contract]
@@ -30,7 +30,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint ItemId;
         uint tokenId;
         uint sellingPrice;
-        // uint cautionMoney;
+
         uint moneyPayed;
         IERC721 nftAddress; // the nft address of the property
         address payable seller;
@@ -38,13 +38,10 @@ contract Marketplace is ReentrancyGuard, Ownable {
         address appraisedBy;
         address documentVerifiedBy;
 
-
         bool onmarket; // if caution money is deposited then [false]
 
-        // bool documentStatus; // false if not verified yet
         bool validDocuments;
         bool appraised;
-        // bool appraisalPassed;
     }
 
     mapping(uint => Item) public items;
@@ -85,7 +82,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
     event cancelled(uint itemId, address cancelledBy);
 
-    event rejected(uint itemId, address cancelledBy);
+    event rejected(uint itemId, address rejectedBy, uint inpectorId);
 
     function _onlyBuyer(uint _propertyID) private view {
         require(
@@ -141,18 +138,10 @@ contract Marketplace is ReentrancyGuard, Ownable {
     // Seller can list new property using this method
     function ListProperty(
         uint _price,
-        uint _cautionAmount,
         IERC721 _nft,
         uint _tokenId
     ) external nonReentrant {
         require(_price > 0, "price must be greater than 0");
-
-        // Caution money should not be more than 20% of the price
-        require(
-            _cautionAmount * 10 <= (2 * _price) &&
-                _cautionAmount * 100 >= (_price),
-            "caution amount must be bwtweeen 1% to 20% of the total price"
-        );
 
         // increment itemCount;
         itemCount++;
@@ -173,9 +162,9 @@ contract Marketplace is ReentrancyGuard, Ownable {
             documentVerifiedBy: address(0),
 
             onmarket: false, // not on market till documents are verified
-            // documentStatus: false,
+
             validDocuments: false,
-            // appraisalPassed: false,
+
             appraised: false
         });
 
@@ -224,12 +213,12 @@ contract Marketplace is ReentrancyGuard, Ownable {
         require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
 
         // check for enough monet to deposit as caution money
+        require(items[_itemid].moneyPayed != 0, "property already booked");
         require(
             msg.value*100 >= items[_itemid].sellingPrice*15,
             "not enough ether to cover caution money and gas fee"
         );
         // check if property is already  booked or sold
-        require(items[_itemid].moneyPayed != 0, "property already booked");
         
         require(items[_itemid].onmarket, "property not on market");
         require(
@@ -289,38 +278,6 @@ contract Marketplace is ReentrancyGuard, Ownable {
         emit cancelled(_itemid, msg.sender);
     }
 
-    // // Step 6:
-    // // If inspection failed refund buyers money
-    // function inspectionresult(
-    //     uint _itemid,
-    //     uint _inspectorid,
-    //     bool _res
-    // ) public onlyInspector(_inspectorid) {
-    //     require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
-    //     require(
-    //         items[_itemid].validDocuments,
-    //         "Documents for property are not valid"
-    //     );
-
-
-    //     items[_itemid].inspectionPassed = _res;
-    //     items[_itemid].inspectedby = msg.sender;
-
-    //     if (!_res) {
-    //         // if inspection failed remove property from market
-    //         items[_itemid].onmarket = false;
-
-    //         if (items[_itemid].cautionMoneyPayed) {
-    //             // if caution money payed by buyer then refund it
-    //             items[_itemid].buyer.transfer(items[_itemid].moneyPayed);
-    //             items[_itemid].moneyPayed = 0;
-    //             items[_itemid].cautionMoneyPayed = false;
-    //             items[_itemid].buyer = payable(address(0));
-    //         }
-    //     }
-
-    //     emit rejected(_itemid, msg.sender);
-    // }
 
     // if appriasal failed refund buyers money
     function appraialResult(
@@ -351,7 +308,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
             }
         }
 
-        emit rejected(_itemid, msg.sender);
+        emit rejected(_itemid, msg.sender, _inspectorid);
     }
 
     // Step 7:
@@ -372,7 +329,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
         require(
             items[_itemid].appraised,
-            "property has not been appreaised"
+            "property has not been appraised"
         );
 
         // transfer money to the seller;
