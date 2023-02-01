@@ -30,24 +30,24 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint ItemId;
         uint tokenId;
         uint sellingPrice;
-        uint cautionMoney;
+        // uint cautionMoney;
         uint moneyPayed;
         IERC721 nftAddress; // the nft address of the property
         address payable seller;
         address payable buyer; // one who has deposited caution money for that property
-        address inspectedby;
         address appraisedBy;
         address documentVerifiedBy;
-        bool sold;
-        bool cautionMoneyPayed;
+
+
         bool onmarket; // if caution money is deposited then [false]
-        bool documentStatus; // false if not verified yet
+
+        // bool documentStatus; // false if not verified yet
         bool validDocuments;
-        bool inspected;
-        bool inspectionPassed;
         bool appraised;
-        bool appraisalPassed;
+        // bool appraisalPassed;
     }
+
+    mapping(uint => Item) public items;
 
     // event when property is listed
     event Offered(
@@ -71,6 +71,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint moneyPayed,
         address seller,
         address buyer
+
     );
 
     event Bought(
@@ -82,36 +83,25 @@ contract Marketplace is ReentrancyGuard, Ownable {
         address indexed buyer
     );
 
-    event cancelled(
-        uint itemId,
-        address cancelledBy
-    );
+    event cancelled(uint itemId, address cancelledBy);
 
-    event rejected(
-        uint itemId,
-        address cancelledBy
-    );
+    event rejected(uint itemId, address cancelledBy);
 
-    mapping(uint => Item) public items;
-
-    // modifiers needed to control who can call the functionsa
-    modifier onlyBuyer(uint256 _propertyID) {
+    function _onlyBuyer(uint _propertyID) private view {
         require(
             msg.sender == items[_propertyID].buyer,
             "Only buyer can call this method"
         );
-        _;
     }
 
-    modifier onlySeller(uint _propertyID) {
+    function _onlySeller(uint _propertyID) private view {
         require(
             msg.sender == items[_propertyID].seller,
             "Only seller can call this method"
         );
-        _;
     }
 
-    modifier onlyInspector(uint _inspectorId) {
+    function _onlyInspector(uint _inspectorId) private view {
         require(
             _inspectorId > 0 && _inspectorId <= landInspectorId,
             "inspector ID is invalid"
@@ -120,6 +110,21 @@ contract Marketplace is ReentrancyGuard, Ownable {
             msg.sender == registeredLandInspectors[_inspectorId],
             "Only inspector can call this method"
         );
+    }
+
+    // modifiers needed to control who can call the functionsa
+    modifier onlyBuyer(uint256 _propertyID) {
+        _onlyBuyer(_propertyID);
+        _;
+    }
+
+    modifier onlySeller(uint _propertyID) {
+        _onlySeller(_propertyID);
+        _;
+    }
+
+    modifier onlyInspector(uint _inspectorId) {
+        _onlyInspector(_inspectorId);
         _;
     }
 
@@ -159,23 +164,19 @@ contract Marketplace is ReentrancyGuard, Ownable {
             ItemId: itemCount,
             tokenId: _tokenId,
             sellingPrice: _price,
-            cautionMoney: _cautionAmount,
+            // cautionMoney: _cautionAmount,
             moneyPayed: 0,
             nftAddress: _nft,
             seller: payable(msg.sender),
             buyer: payable(address(0)),
-            inspectedby: address(0),
             appraisedBy: address(0),
             documentVerifiedBy: address(0),
-            sold: false,
-            cautionMoneyPayed: false, // caution money payed
+
             onmarket: false, // not on market till documents are verified
-            documentStatus: false,
+            // documentStatus: false,
             validDocuments: false,
-            inspected: false, // inspectionPassed
-            inspectionPassed: false,
-            appraised: false,
-            appraisalPassed: false
+            // appraisalPassed: false,
+            appraised: false
         });
 
         emit Offered(itemCount, address(_nft), _tokenId, _price, msg.sender);
@@ -191,7 +192,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
 
         items[_itemid].documentVerifiedBy = msg.sender;
-        items[_itemid].documentStatus = true;
+
         items[_itemid].validDocuments = _res;
         items[_itemid].onmarket = _res;
 
@@ -208,7 +209,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
         // do not allow to change when caution money already deposited
         require(
-            !items[_itemid].cautionMoneyPayed,
+            items[_itemid].moneyPayed != 0,
             "Cannot change price when caution money already payed"
         );
 
@@ -222,37 +223,33 @@ contract Marketplace is ReentrancyGuard, Ownable {
     function depositCautionMoney(uint _itemid) external payable nonReentrant {
         require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
 
-        Item storage item = items[_itemid];
         // check for enough monet to deposit as caution money
         require(
-            msg.value >= item.cautionMoney,
+            msg.value*100 >= items[_itemid].sellingPrice*15,
             "not enough ether to cover caution money and gas fee"
         );
         // check if property is already  booked or sold
-        require(!item.sold, "property already sold");
+        require(items[_itemid].moneyPayed != 0, "property already booked");
+        
+        require(items[_itemid].onmarket, "property not on market");
         require(
-            !item.cautionMoneyPayed,
-            "property already booked bt another buyer"
-        );
-        require(item.onmarket, "property not on market");
-        require(
-            item.validDocuments,
+            items[_itemid].validDocuments,
             "sellers property documents are not valid"
         );
 
         // update item caution money deposited status to true
-        item.cautionMoneyPayed = true;
-        item.onmarket = false;
-        item.moneyPayed = msg.value;
-        item.buyer = payable(msg.sender);
+
+        items[_itemid].onmarket = false;
+        items[_itemid].moneyPayed = msg.value;
+        items[_itemid].buyer = payable(msg.sender);
 
         emit Booked(
             _itemid,
-            address(item.nftAddress),
-            item.tokenId,
-            item.moneyPayed,
-            item.seller,
-            item.buyer
+            address(items[_itemid].nftAddress),
+            items[_itemid].tokenId,
+            items[_itemid].moneyPayed,
+            items[_itemid].seller,
+            items[_itemid].buyer
         );
     }
 
@@ -260,81 +257,70 @@ contract Marketplace is ReentrancyGuard, Ownable {
     // If seller delists the property (backs off) buyer gets moeny back
     function delist(uint _itemid) public onlySeller(_itemid) nonReentrant {
         require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
-        Item storage item = items[_itemid];
-        if (!item.cautionMoneyPayed) {
-            item.onmarket = false;
+        if (items[_itemid].moneyPayed == 0) {
+            items[_itemid].onmarket = false;
         } else {
             // refund the caution money back to the buyer
-            item.buyer.transfer(item.moneyPayed);
+            items[_itemid].buyer.transfer(items[_itemid].moneyPayed);
 
-            item.moneyPayed = 0;
-            item.cautionMoneyPayed = false;
-            item.onmarket = false;
-            item.buyer = payable(address(0));
+            items[_itemid].moneyPayed = 0;
+            items[_itemid].onmarket = false;
+            items[_itemid].buyer = payable(address(0));
         }
 
-        emit cancelled(
-            _itemid,
-            msg.sender
-        );
+        emit cancelled(_itemid, msg.sender);
     }
 
     // Allow buyer to backfoff [seller keeps caution money]
     function backoff(uint _itemid) public onlyBuyer(_itemid) nonReentrant {
         require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
-        Item storage item = items[_itemid];
 
-        item.seller.transfer(item.cautionMoney); // give caution money to the seller
+        items[_itemid].seller.transfer((items[_itemid].sellingPrice*15)/100); // give caution money to the seller
         // any amount payed extra than the caution money is retured back to the buyer
-        item.buyer.transfer(item.moneyPayed - item.cautionMoney);
-
-        item.moneyPayed = 0;
-        item.cautionMoneyPayed = false;
-        item.onmarket = true;
-        item.buyer = payable(address(0));
-        item.sold = false;
-
-        emit cancelled(
-            _itemid,
-            msg.sender
+        items[_itemid].buyer.transfer(
+            items[_itemid].moneyPayed - (items[_itemid].sellingPrice*15)/100
         );
+
+        items[_itemid].moneyPayed = 0;
+
+        items[_itemid].onmarket = true;
+        items[_itemid].buyer = payable(address(0));
+
+        emit cancelled(_itemid, msg.sender);
     }
 
-    // Step 6:
-    // If inspection failed refund buyers money
-    function inspectionresult(
-        uint _itemid,
-        uint _inspectorid,
-        bool _res
-    ) public onlyInspector(_inspectorid) {
-        require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
-        require(
-            items[_itemid].validDocuments,
-            "Documents for property are not valid"
-        );
+    // // Step 6:
+    // // If inspection failed refund buyers money
+    // function inspectionresult(
+    //     uint _itemid,
+    //     uint _inspectorid,
+    //     bool _res
+    // ) public onlyInspector(_inspectorid) {
+    //     require(_itemid > 0 && _itemid <= itemCount, "Item does not exist");
+    //     require(
+    //         items[_itemid].validDocuments,
+    //         "Documents for property are not valid"
+    //     );
 
-        items[_itemid].inspected = true;
-        items[_itemid].inspectionPassed = _res;
-        items[_itemid].inspectedby = msg.sender;
 
-        if (!_res) {
-            // if inspection failed remove property from market
-            items[_itemid].onmarket = false;
+    //     items[_itemid].inspectionPassed = _res;
+    //     items[_itemid].inspectedby = msg.sender;
 
-            if (items[_itemid].cautionMoneyPayed) {
-                // if caution money payed by buyer then refund it
-                items[_itemid].buyer.transfer(items[_itemid].moneyPayed);
-                items[_itemid].moneyPayed = 0;
-                items[_itemid].cautionMoneyPayed = false;
-                items[_itemid].buyer = payable(address(0));
-            }
-        }
+    //     if (!_res) {
+    //         // if inspection failed remove property from market
+    //         items[_itemid].onmarket = false;
 
-         emit rejected(
-            _itemid,
-            msg.sender
-        );
-    }
+    //         if (items[_itemid].cautionMoneyPayed) {
+    //             // if caution money payed by buyer then refund it
+    //             items[_itemid].buyer.transfer(items[_itemid].moneyPayed);
+    //             items[_itemid].moneyPayed = 0;
+    //             items[_itemid].cautionMoneyPayed = false;
+    //             items[_itemid].buyer = payable(address(0));
+    //         }
+    //     }
+
+    //     emit rejected(_itemid, msg.sender);
+    // }
 
     // if appriasal failed refund buyers money
     function appraialResult(
@@ -348,27 +334,24 @@ contract Marketplace is ReentrancyGuard, Ownable {
             "Documents for property are not valid"
         );
 
-        items[_itemid].appraised = true;
-        items[_itemid].appraisalPassed = _res;
+        items[_itemid].appraised = _res;
+
         items[_itemid].appraisedBy = msg.sender;
 
         if (!_res) {
             // if inspection failed remove property from market
             items[_itemid].onmarket = false;
 
-            if (items[_itemid].cautionMoneyPayed) {
+            if (items[_itemid].moneyPayed*100 > items[_itemid].sellingPrice*15) {
                 // if caution money payed by buyer then refund it
                 items[_itemid].buyer.transfer(items[_itemid].moneyPayed);
                 items[_itemid].moneyPayed = 0;
-                items[_itemid].cautionMoneyPayed = false;
+
                 items[_itemid].buyer = payable(address(0));
             }
         }
 
-         emit rejected(
-            _itemid,
-            msg.sender
-        );
+        emit rejected(_itemid, msg.sender);
     }
 
     // Step 7:
@@ -383,15 +366,12 @@ contract Marketplace is ReentrancyGuard, Ownable {
             "not enough ether to cover item price and gas fee"
         );
         require(items[_itemid].onmarket, "Property not on sale");
-        require(items[_itemid].cautionMoneyPayed, "caution money not payed");
-        require(!items[_itemid].sold, "property already sold");
+        require(items[_itemid].moneyPayed*100 >= items[_itemid].sellingPrice*15, "caution money not payed");
+
         require(items[_itemid].validDocuments, "Documents need to be verified");
+
         require(
-            items[_itemid].inspectionPassed,
-            "property has not been inspected"
-        );
-        require(
-            items[_itemid].appraisalPassed,
+            items[_itemid].appraised,
             "property has not been appreaised"
         );
 
@@ -404,32 +384,28 @@ contract Marketplace is ReentrancyGuard, Ownable {
             items[_itemid].tokenId
         );
 
-
         emit Bought(
-         _itemid,
-          address(items[_itemid].nftAddress),
-         items[_itemid].tokenId,
-         items[_itemid].sellingPrice,
-          items[_itemid].seller,
-          items[_itemid].buyer
+            _itemid,
+            address(items[_itemid].nftAddress),
+            items[_itemid].tokenId,
+            items[_itemid].sellingPrice,
+            items[_itemid].seller,
+            items[_itemid].buyer
         );
 
         // delist the property
         items[_itemid].moneyPayed = 0;
         items[_itemid].seller = payable(msg.sender);
         items[_itemid].buyer = payable(address(0));
-        items[_itemid].inspectedby = address(0);
+
         items[_itemid].appraisedBy = address(0);
         items[_itemid].documentVerifiedBy = address(0);
-        items[_itemid].sold = false;
-        items[_itemid].cautionMoneyPayed = false;
-        items[_itemid].onmarket = false; 
-        items[_itemid].documentStatus = false;
+
+
+        items[_itemid].onmarket = false;
+
         items[_itemid].validDocuments = false;
-        items[_itemid].inspected = false;
-        items[_itemid].inspectionPassed = false;
         items[_itemid].appraised = false;
-        items[_itemid].appraisalPassed = false;
-      
+
     }
 }

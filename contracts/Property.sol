@@ -23,6 +23,7 @@ contract Property is ERC721URIStorage{
         _setTokenURI(newItemId, _tokenURI);
 
         return newItemId;
+        
     }
 
     function TotalListedProperties() public view returns (uint) {
