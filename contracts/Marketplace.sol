@@ -3,27 +3,21 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Marketplace is ReentrancyGuard, Ownable {
+
+contract Marketplace is ReentrancyGuard {
     // state variables
-    address payable public immutable feeAccount; // account that recieves fees
+    // address payable public immutable feeAccount; // account that recieves fees
     address payable public immutable escrowAccount; // account that hold money during the process
-    uint public immutable feePercent; // fee percentage on sales
+    address public immutable owner;
+    // uint public immutable feePercent; // fee percentage on sales
     uint public itemCount;
 
     uint public landInspectorId;
     mapping(uint => address) public registeredLandInspectors; // record of all the approved land inspectors
 
     // Add a new land inspector [Can only be called by owner of the contract]
-    function addLandinspector(
-        address _inspector
-    ) public onlyOwner returns (uint) {
-        landInspectorId++;
-        registeredLandInspectors[landInspectorId] = _inspector;
-
-        return landInspectorId;
-    }
+    
 
     // Data type to store all the information about the Property
     struct Item {
@@ -109,6 +103,13 @@ contract Marketplace is ReentrancyGuard, Ownable {
         );
     }
 
+     function _onlyOwner() private view {
+        require(
+            msg.sender == owner,
+            "Only owner can call this method"
+        );
+    }
+
     // modifiers needed to control who can call the functionsa
     modifier onlyBuyer(uint256 _propertyID) {
         _onlyBuyer(_propertyID);
@@ -125,13 +126,28 @@ contract Marketplace is ReentrancyGuard, Ownable {
         _;
     }
 
+    modifier onlyOwner(){
+        _onlyOwner();
+        _;
+    }
+
     // fee account stores the margin(fees) on transaction
     // and
     //  escrow account stores the money till the transaction is complete
-    constructor(uint _feePercent, address _feeaccount) {
+    constructor(address _owner) {
         escrowAccount = payable(msg.sender);
-        feeAccount = payable(_feeaccount);
-        feePercent = _feePercent;
+        owner = _owner;
+        // feeAccount = payable(_feeaccount);
+        // feePercent = _feePercent;
+    }
+
+    function addInspector(
+        address _inspector
+    ) public onlyOwner returns (uint) {
+        landInspectorId++;
+        registeredLandInspectors[landInspectorId] = _inspector;
+
+        return landInspectorId;
     }
 
     // STEP 1:
